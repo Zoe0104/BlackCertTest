@@ -10,6 +10,12 @@
 		$body = $('body'),
 		$sidebar = $('#sidebar');
 
+		Object.defineProperty(HTMLFormElement.prototype, 'formdata', {
+			get() {
+				return new FormData(this);
+			}
+		})
+		
 	// Breakpoints.
 		breakpoints({
 			xlarge:   [ '1281px',  '1680px' ],
