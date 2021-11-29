@@ -3161,6 +3161,11 @@ input, select, textarea {
 
 		}
 
+/* SpaceHold */
+	.spacehold{
+		min-height: 15em;
+	}
+
 /* Table */
 
 	.table-wrapper {

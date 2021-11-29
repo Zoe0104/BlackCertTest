@@ -50,6 +50,13 @@
 
 			});
 
+			// $('#domainSubmit').submit(function(event){
+			// 	event.stopPropagation();
+			// 	event.preventDefault();
+			// 	var domain=$('#domain').val()
+			// 	alert(domain)
+			// })
+
 	// Sidebar.
 		if ($sidebar.length > 0) {
 

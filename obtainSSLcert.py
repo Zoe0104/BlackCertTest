@@ -3,10 +3,32 @@ from OpenSSL import SSL
 from OpenSSL import crypto
 import OpenSSL
 from flask import Flask
+from flask.helpers import url_for
+from flask import Flask, redirect, url_for, request
+from flask.templating import render_template
 import idna
 from urllib import parse
 import parser
 import datetime
+from werkzeug.utils import redirect
+
+app=Flask(__name__)
+
+@app.route('/index')
+def index():
+    return render_template("index.html")
+
+@app.route('/certOutput')
+def certOutput():
+    with open("certSearch.txt","r") as f:
+        domainDetail=f.read()
+    return render_template("index.html",domainDetail=domainDetail)
+
+@app.route('/search',methods=['POST'])
+def requestDomainSearch():
+    domain=request.form['domain']
+    return redirect(url_for('obtainSSLcert',domain=domain))
+
 def get_certificate(hostname, port):
     sock = socket()
     # sock.settimeout(10) # 不要开启
@@ -25,24 +47,30 @@ def get_certificate(hostname, port):
     sock.close()
     return cert
 
+@app.route('/cert/<path:domain>')
 def obtainSSLcert(domain):
     rs = parse.urlparse(domain)
     cert = get_certificate(rs.hostname, int(rs.port or 443))
     certIssue=cert.get_issuer()
-    print("证书版本：\t",cert.get_version()+1)
-    print("证书序列号：\t",hex(cert.get_serial_number()))
-    print("使用的签名算法：\t",cert.get_signature_algorithm().decode("UTF-8"))
-    print("颁发机构：\t",certIssue.commonName)
+    output=""
     datetime_struct=datetime.datetime.strptime(cert.get_notAfter().decode("UTF-8")[0:-2],"%Y%m%d%H%M%S")
-    print("有效期从：\t",datetime_struct.strftime('%Y-%m-%d %H-%M-%S'))
     datetime_struct=datetime.datetime.strptime(cert.get_notBefore().decode("UTF-8")[0:-2],"%Y%m%d%H%M%S")
-    print("到：\t",datetime_struct.strftime('%Y-%m-%d %H-%M-%S'))
-    print("证书是否已经过期：\t",cert.has_expired())
-    print("公钥：\n",crypto.dump_publickey(crypto.FILETYPE_PEM,cert.get_pubkey()).decode("utf-8"))
-    print("主题信息：")
-    print("CN：通用名称\tOU：机构单元名称\nO：机构名\tL：地理位置\nS：州/省名\tC：国名\n")
+    output+=("证书版本：\t"+str(cert.get_version()+1)+'\n')
+    output+=("证书序列号：\t"+str(hex(cert.get_serial_number()))+'\n')
+    output+=("使用的签名算法：\t"+str(cert.get_signature_algorithm().decode("UTF-8"))+'\n')
+    output+=("颁发机构：\t"+str(certIssue.commonName)+'\n')
+    output+=("有效期从：\t"+datetime_struct.strftime('%Y-%m-%d %H-%M-%S')+'\n')
+    output+=("到：\t"+datetime_struct.strftime('%Y-%m-%d %H-%M-%S')+'\n')
+    output+=("证书是否已经过期：\t"+str(cert.has_expired())+'\n')
+    output+=("公钥：\n"+crypto.dump_publickey(crypto.FILETYPE_PEM,cert.get_pubkey()).decode("utf-8")+'\n')
+    output+=("主题信息：\n")
+    output+=("CN：通用名称\tOU：机构单元名称\nO：机构名\tL：地理位置\nS：州/省名\tC：国名\n")
     for item in certIssue.get_components():
-        print(item[0].decode("utf-8"),"——",item[1].decode("utf-8"))
+        output+=(item[0].decode("utf-8")+"——"+item[1].decode("utf-8")+'\n')
+    with open("certSearch.txt","w") as f:
+        f.write(output)
+    return render_template("index.html",certDetail=output)
+    # return redirect(url_for("certOutput"))
 
 if __name__=="__main__":
-    obtainSSLcert("https://www.bilibili.com")
+    app.run(debug=True)
