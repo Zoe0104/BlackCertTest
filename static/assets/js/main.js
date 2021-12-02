@@ -50,12 +50,12 @@
 
 			});
 
-			// $('#domainSubmit').submit(function(event){
-			// 	event.stopPropagation();
-			// 	event.preventDefault();
-			// 	var domain=$('#domain').val()
-			// 	alert(domain)
-			// })
+			$('#domainSubmit').bind('click',function(){
+				$.getJSON('/search',{domain:$('input[name="domain"]').val()},function(data){
+					$("#certDetail").text(data.output)
+					});
+				return false
+			});
 
 	// Sidebar.
 		if ($sidebar.length > 0) {

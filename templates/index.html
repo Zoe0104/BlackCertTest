@@ -9,8 +9,8 @@
 		<title>Zoe|恶意证书检测</title>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-		<link rel="stylesheet" href="assets/css/main.css" />
-		<noscript><link rel="stylesheet" href="assets/css/noscript.css" /></noscript>
+		<link rel="stylesheet" href="static/assets/css/main.css" />
+		<noscript><link rel="stylesheet" href="static/assets/css/noscript.css" /></noscript>
 	</head>
 	<body class="is-preload">
 
@@ -51,10 +51,10 @@
 							<div class="search">
 								<div class="inner">
 									<h3>请在下方输入待查阅证书的域名。</h3>
-									<form id="domainSubmit" method="post" action="http://127.0.0.1:5000/search">										
+									<form>										
 										<ul class="actions">
 											<li><input type="text" name="domain" id="domain" value="" placeholder="'https://'开头的域名" /></li>
-											<li><input class="button primary fit" type="submit" value="查询"/></li>
+											<li><input id="domainSubmit" class="button primary fit" value="查询"/></li>
 										</ul>
 									</form>
 								</div>			
@@ -64,7 +64,7 @@
 							<div class="search">
 								<div class="inner">
 									<h3>查询结果</h3>
-									<textarea placeholder="查询结果格式：&#10证书版本：1.0&#10证书序列号：xxxxx&#10使用的签名算法：xxxx&#10....."class="spacehold">{{certDetail}}</textarea>
+									<textarea id="certDetail" placeholder="查询结果格式：&#10证书版本：1.0&#10证书序列号：xxxxx&#10使用的签名算法：xxxx&#10....."class="spacehold">{{certDetail}}</textarea>
 									<br>
 									<ul class="actions">
 										<li><a href="generic.html" class="button primary fit">下载证书(pem格式）</a></li>
@@ -188,13 +188,13 @@
 			</footer>
 
 		<!-- Scripts -->
-			<script src="assets/js/jquery.min.js"></script>
-			<script src="assets/js/jquery.scrollex.min.js"></script>
-			<script src="assets/js/jquery.scrolly.min.js"></script>
-			<script src="assets/js/browser.min.js"></script>
-			<script src="assets/js/breakpoints.min.js"></script>
-			<script src="assets/js/util.js"></script>
-			<script src="assets/js/main.js"></script>
+			<script src="static/assets/js/jquery.min.js"></script>
+			<script src="static/assets/js/jquery.scrollex.min.js"></script>
+			<script src="static/assets/js/jquery.scrolly.min.js"></script>
+			<script src="static/assets/js/browser.min.js"></script>
+			<script src="static/assets/js/breakpoints.min.js"></script>
+			<script src="static/assets/js/util.js"></script>
+			<script src="static/assets/js/main.js"></script>
 
 	</body>
 </html>
