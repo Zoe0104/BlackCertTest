@@ -49,13 +49,32 @@
 					$(this).parents('form').submit();
 
 			});
-
+			
+			//给查证书的提交按钮绑定一个点击事件，通过getJSON异步获取结果，从而不刷新界面就获得结果
 			$('#domainSubmit').bind('click',function(){
+				
 				$.getJSON('/search',{domain:$('input[name="domain"]').val()},function(data){
 					$("#certDetail").text(data.output)
+					var state=1
+					state=data.state
+					if(state==1)
+						{
+							var btn=document.createElement("a")
+							btn.className="button primary fit"
+							btn.innerText="下载证书(pem格式）"
+							btn.id="download"
+							btn.href="/download"
+							document.getElementById("download-btn").appendChild(btn)
+						}
+						else
+						{
+							document.getElementById("download-btn").removeChild(document.getElementById("download-btn").firstChild)
+						}
 					});
+				
 				return false
 			});
+
 
 	// Sidebar.
 		if ($sidebar.length > 0) {

@@ -1,9 +1,10 @@
+import os
 from socket import socket
 from sys import path
 from OpenSSL import SSL
 from OpenSSL import crypto
 import OpenSSL
-from flask import Flask,jsonify
+from flask import Flask,jsonify,send_file
 from flask.helpers import url_for
 from flask import Flask, redirect, url_for, request
 from flask.templating import render_template
@@ -11,7 +12,7 @@ import idna
 from urllib import parse
 import parser
 import datetime
-from werkzeug.utils import redirect
+
 
 app=Flask(__name__)
 
@@ -23,7 +24,12 @@ def index():
 @app.route('/search',methods=['GET'])
 def requestDomainSearch():
     domain=request.args.get("domain","",type=str)
-    return jsonify(output=obtainSSLcert(domain))
+    try:
+        return jsonify(output=obtainSSLcert(domain),state=1)
+    except TimeoutError:
+        return jsonify(output="请检查该域名是否无法访问。",state=0)
+    except Exception:
+        return jsonify(output="请输入以\"https://\"开头的正确格式的域名。",state=0)
 
 def get_certificate(hostname, port):
     sock = socket()
@@ -46,6 +52,10 @@ def get_certificate(hostname, port):
 def obtainSSLcert(domain):
     rs = parse.urlparse(domain)
     cert = get_certificate(rs.hostname, int(rs.port or 443))
+    with open("cert.pem","wb") as f:
+        # 别再查怎么存证书了，这不就是吗
+        f.write(crypto.dump_certificate(crypto.FILETYPE_PEM,cert))
+
     certIssue=cert.get_issuer()
     certSubject=cert.get_subject()
     output=""
@@ -61,13 +71,18 @@ def obtainSSLcert(domain):
     output+=("使用的签名算法：\t"+str(cert.get_signature_algorithm().decode("UTF-8"))+'\n')
     output+=("颁发机构：\t"+str(certIssue.commonName)+'\n')
     output+=("有效期从：\t"+datetime_struct.strftime('%Y-%m-%d %H-%M-%S')+'\n')
-    output+=("到：\t"+datetime_struct.strftime('%Y-%m-%d %H-%M-%S')+'\n')
+    output+=("至：\t"+datetime_struct.strftime('%Y-%m-%d %H-%M-%S')+'\n')
     output+=("证书是否已经过期：\t"+str(cert.has_expired())+'\n')
     output+=("公钥：\n"+crypto.dump_publickey(crypto.FILETYPE_PEM,cert.get_pubkey()).decode("utf-8")+'\n')
     
-    with open("certSearch.txt","w") as f:
-        f.write(output)
     return output
+
+@app.route('/download')
+def download():
+    return send_file("cert.pem")
+    
+    
+
 
 if __name__=="__main__":
     app.run(debug=True)
