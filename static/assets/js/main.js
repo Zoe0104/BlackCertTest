@@ -74,35 +74,25 @@
 				return false
 			});
 
-			//上传证书
-			$("#uploadCert").bind('click',function () {
+			//分析证书
+			$("#analysisCert").bind('click',function () {
 				var fileObj = document.getElementById("upload").files[0]; // js 获取文件对象
 				if (typeof (fileObj) == "undefined" || fileObj.size <= 0) {
 					alert("请选择文件");
 					return;
 				}
-				$.getJSON('/uploadCert',{cert:fileObj},function(data){
-					alert("success")
+				//下面这一段有bug，但我决定先吃饭
+				$.getJSON('/analysis',{cert:fileObj},function(data){
+					if(data.state){
+						alert(data.message)}
+					else{
+						alert("文件上传失败")
+					}
 				})
-				
-				// var formFile = new FormData();
-				// formFile.append("action", "UploadVMKImagePath");  
-				// formFile.append("file", fileObj); //加入文件对象  
-				// var data = formFile;
-				// $.ajax({
-				// 	url: "/uploadCert",
-				// 	data: data,
-				// 	type: "Post",
-				// 	dataType: "json",
-				// 	cache: false,//上传文件无需缓存
-				// 	processData: false,//用于对data参数进行序列化处理 这里必须false
-				// 	contentType: false, //必须
-				// 	success: function (result) {
-				// 		alert("上传完成!");
-				// 	},
-				// })
 				return false
 			});
+
+			
 
 	// Sidebar.
 		if ($sidebar.length > 0) {

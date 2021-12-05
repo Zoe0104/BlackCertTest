@@ -1,11 +1,12 @@
 import os
+import pickle
 from socket import socket
 from sys import path
 import time
 from OpenSSL import SSL
 from OpenSSL import crypto
 import OpenSSL
-from flask import Flask,jsonify,send_file
+from flask import Flask, json,jsonify,send_file
 from flask.helpers import flash, url_for
 from flask import Flask, redirect, url_for, request
 from flask.templating import render_template
@@ -13,12 +14,13 @@ import idna
 from urllib import parse
 import parser
 import datetime
-
+import sklearn
 from werkzeug.utils import secure_filename
 
 
 app=Flask(__name__)
-UPLOAD_FOLDER = 'G:\\Zoe0104\\blackCertDetect\\uploadCert'  #文件存放路径
+CURRENT_PARENT=os.path.dirname(__file__)
+UPLOAD_FOLDER = CURRENT_PARENT+'\\uploadCert'  #文件存放路径
 ALLOWED_EXTENSIONS = set(['crt','cer','pem']) #限制上传文件格式
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
@@ -98,27 +100,6 @@ def download():
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-# 上传文件模块
-@app.route('/uploadCert', methods=['GET', 'POST'])
-def uploadCert():
-    os.remove(app.config['UPLOAD_FOLDER'])
-    if request.method == 'POST':
-        # check if the post request has the file part
-        if 'file' not in request.files:
-            flash('No file part')
-            return redirect(request.url)
-        file = request.files['file']
-        # if user does not select file, browser also
-        # submit an empty part without filename
-        if file.filename == '':
-            flash('No selected file')
-            return redirect(request.url)
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            return  '{"filename":"%s"}' % filename
-    return ''
 
 # 通过特征工程提取的特征
 def extractFeature(cert):
@@ -216,18 +197,38 @@ def extractFeature(cert):
                 cert_feature+=[-1]
             else:
                 cert_feature+=[(end-begin)]
+        return cert_feature
 
-@app.route('/analysis')
+@app.route('/analysis', methods=['GET', 'POST'])
 def analysisCert():
-    try:
-       filename=os.listdir(app.config['UPLOAD_FOLDER'])[0]
-    except Exception:
-        return "请先上传文件"
+    if request.method == 'POST':
+        # check if the post request has the file part
+        if 'file' not in request.files:
+            flash('No file part')
+            return jsonify(state=0)
+        file = request.files['file']
+        # if user does not select file, browser also
+        # submit an empty part without filename
+        if file.filename == '':
+            flash('No selected file')
+            return jsonify(state=0)
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+    else:
+        return jsonify(state=0)
+    
     cert_file_buffer=open(os.path.join(app.config['UPLOAD_FOLDER'], filename)).read()
     cert=crypto.load_certificate(crypto.FILETYPE_PEM,cert_file_buffer)
     cert_feature=extractFeature(cert) # 获取特征工程的特征
     # 加载分类器进行分类
-    
+    with open(os.path.join(CURRENT_PARENT,"classific_model\\adaBoost.pickle"),"rb") as f:
+        ada_module=pickle.load(f)
+    y=ada_module.predict(cert_feature)
+    if y==1:
+        return jsonify(message="这个证书很安全！",state=1)
+    else:
+        return jsonify(message="这个证书很可疑！",state=1)
 
 if __name__=="__main__":
     app.run(debug=True)
