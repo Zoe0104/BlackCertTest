@@ -1,11 +1,12 @@
 import os
 from socket import socket
 from sys import path
+import time
 from OpenSSL import SSL
 from OpenSSL import crypto
 import OpenSSL
 from flask import Flask,jsonify,send_file
-from flask.helpers import url_for
+from flask.helpers import flash, url_for
 from flask import Flask, redirect, url_for, request
 from flask.templating import render_template
 import idna
@@ -13,14 +14,21 @@ from urllib import parse
 import parser
 import datetime
 
+from werkzeug.utils import secure_filename
+
 
 app=Flask(__name__)
+UPLOAD_FOLDER = 'G:\\Zoe0104\\blackCertDetect\\uploadCert'  #文件存放路径
+ALLOWED_EXTENSIONS = set(['crt','cer','pem']) #限制上传文件格式
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
 
+# 首页
 @app.route('/index')
 def index():
     return render_template("index.html")
 
-
+##############第一部分 网站证书查询###################
 @app.route('/search',methods=['GET'])
 def requestDomainSearch():
     domain=request.args.get("domain","",type=str)
@@ -31,6 +39,7 @@ def requestDomainSearch():
     except Exception:
         return jsonify(output="请输入以\"https://\"开头的正确格式的域名。",state=0)
 
+# 获取证书文件
 def get_certificate(hostname, port):
     sock = socket()
     # sock.settimeout(10) # 不要开启
@@ -49,6 +58,7 @@ def get_certificate(hostname, port):
     sock.close()
     return cert
 
+# 存储证书文件并分析内容
 def obtainSSLcert(domain):
     rs = parse.urlparse(domain)
     cert = get_certificate(rs.hostname, int(rs.port or 443))
@@ -77,12 +87,147 @@ def obtainSSLcert(domain):
     
     return output
 
+# 下载证书文件
 @app.route('/download')
 def download():
     return send_file("cert.pem")
-    
-    
 
+######################第二部分 恶意证书检测#####################
+
+# 检查上传的文件是否符合文件类型
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# 上传文件模块
+@app.route('/uploadCert', methods=['GET', 'POST'])
+def uploadCert():
+    os.remove(app.config['UPLOAD_FOLDER'])
+    if request.method == 'POST':
+        # check if the post request has the file part
+        if 'file' not in request.files:
+            flash('No file part')
+            return redirect(request.url)
+        file = request.files['file']
+        # if user does not select file, browser also
+        # submit an empty part without filename
+        if file.filename == '':
+            flash('No selected file')
+            return redirect(request.url)
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            return  '{"filename":"%s"}' % filename
+    return ''
+
+# 通过特征工程提取的特征
+def extractFeature(cert):
+    cert_feature=[]
+    #1 输入是否自签
+    a=cert.get_extension_count()
+    for i in range(0,a):
+        b=cert.get_extension(i).get_short_name()
+        if b==b'basicConstraints' and cert.get_extension(i).get_data()==b'0\x03\x01\x01\xff':
+            cert_feature+=[1]
+        else:
+            cert_feature+=[0]
+
+    #2 输入是否有效域名
+    a=cert.get_subject().CN
+    if not(a==None or a=="example.com"):
+        x=len(str.split(a,"."))
+        if x>=2 and x<=3:
+            cert_feature+=[1]
+        else:
+            cert_feature+=[0]
+    else:
+        cert_feature+=[0]
+
+    #3 输入是否是可疑的country
+    subject=cert.get_subject()
+    if subject.countryName==None:
+        # c字段不存在就当做不可疑
+        cert_feature+=[0]
+    else:
+        if len(subject.countryName)<2 or len(subject.countryName)>2:
+            cert_feature+=[1]
+        elif subject.countryName[0]==subject.countryName[1] or (subject.countryName[0]<'A' or subject.countryName[0]>'Z'):
+            cert_feature+=[1]
+        else:
+            cert_feature+=[0]
+    
+    issuer=cert.get_issuer()
+    if issuer.countryName==None:
+        cert_feature+=[0]
+    else:
+        if len(issuer.countryName)<2 or len(issuer.countryName)>2:
+            cert_feature+=[1]
+        elif issuer.countryName[0]==issuer.countryName[1] or (issuer.countryName[0]<'A' or issuer.countryName[0]>'Z'):
+            cert_feature+=[1]
+        else:
+            cert_feature+=[0]
+
+    #4 输入是否subject各字段存在
+    tem_dict={b'C':None,b'O':None,b'OU':None,b'L':None,b'ST':None,b'CN':None,b'emailAddress':None}
+    for i in cert.get_subject().get_components():
+        if i[0] in tem_dict.keys():
+            tem_dict[i[0]]=i[1]
+    for each in tem_dict.items():
+        if each[1]!=None:
+            cert_feature+=[1]
+        else:
+            cert_feature+=[0]
+
+    #5 输入是否issuer各字段存在
+    tem_dict={b'C':None,b'O':None,b'OU':None,b'L':None,b'ST':None,b'CN':None,b'emailAddress':None}
+    for i in cert.get_issuer().get_components():
+        if i[0] in tem_dict.keys():
+            tem_dict[i[0]]=i[1]
+    for each in tem_dict.items():
+        if each[1]!=None:
+            cert_feature+=[1]
+        else:
+            cert_feature+=[0]
+
+    #6 subject、issuer和extension的item个数
+    cert_feature+=[len(cert.get_subject().get_components())]
+    cert_feature+=[len(cert.get_issuer().get_components())]
+    cert_feature+=[cert.get_extension_count()]
+
+    #7 有效期长度
+    validate_beg=str(cert.get_notBefore(),encoding="utf-8")
+    validate_end=str(cert.get_notAfter(),encoding="utf-8")
+    if len(validate_beg)!=len("20191201002241Z") or len(validate_end)!=len("20191201002241Z"):
+        cert_feature+=[-1]
+    elif (not str.isdigit(validate_beg[0:-1])) or (not str.isdigit(validate_end[0:-1])):
+        cert_feature+=[-1]
+    else:
+        validate_beg=validate_beg[0:-1]
+        validate_end=validate_end[0:-1]
+        try:
+            beginArray=time.strptime(validate_beg,"%Y%m%d%H%M%S")
+            begin=time.mktime(beginArray)
+            endArray=time.strptime(validate_end,"%Y%m%d%H%M%S")
+            end=time.mktime(endArray)
+        except OverflowError:
+            cert_feature+=[-1]
+        else:
+            if end-begin<=0:
+                cert_feature+=[-1]
+            else:
+                cert_feature+=[(end-begin)]
+
+@app.route('/analysis')
+def analysisCert():
+    try:
+       filename=os.listdir(app.config['UPLOAD_FOLDER'])[0]
+    except Exception:
+        return "请先上传文件"
+    cert_file_buffer=open(os.path.join(app.config['UPLOAD_FOLDER'], filename)).read()
+    cert=crypto.load_certificate(crypto.FILETYPE_PEM,cert_file_buffer)
+    cert_feature=extractFeature(cert) # 获取特征工程的特征
+    # 加载分类器进行分类
+    
 
 if __name__=="__main__":
     app.run(debug=True)

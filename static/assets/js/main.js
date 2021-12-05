@@ -52,7 +52,6 @@
 			
 			//给查证书的提交按钮绑定一个点击事件，通过getJSON异步获取结果，从而不刷新界面就获得结果
 			$('#domainSubmit').bind('click',function(){
-				
 				$.getJSON('/search',{domain:$('input[name="domain"]').val()},function(data){
 					$("#certDetail").text(data.output)
 					var state=1
@@ -75,6 +74,35 @@
 				return false
 			});
 
+			//上传证书
+			$("#uploadCert").bind('click',function () {
+				var fileObj = document.getElementById("upload").files[0]; // js 获取文件对象
+				if (typeof (fileObj) == "undefined" || fileObj.size <= 0) {
+					alert("请选择文件");
+					return;
+				}
+				$.getJSON('/uploadCert',{cert:fileObj},function(data){
+					alert("success")
+				})
+				
+				// var formFile = new FormData();
+				// formFile.append("action", "UploadVMKImagePath");  
+				// formFile.append("file", fileObj); //加入文件对象  
+				// var data = formFile;
+				// $.ajax({
+				// 	url: "/uploadCert",
+				// 	data: data,
+				// 	type: "Post",
+				// 	dataType: "json",
+				// 	cache: false,//上传文件无需缓存
+				// 	processData: false,//用于对data参数进行序列化处理 这里必须false
+				// 	contentType: false, //必须
+				// 	success: function (result) {
+				// 		alert("上传完成!");
+				// 	},
+				// })
+				return false
+			});
 
 	// Sidebar.
 		if ($sidebar.length > 0) {
