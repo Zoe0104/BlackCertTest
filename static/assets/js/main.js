@@ -92,14 +92,25 @@
 					cache:false,
 					processData:false,
 					contentType:false,
-					sucess:	function(data){
-					if(data.state){
-						alert(data.message)}
-					else{
-						alert("文件上传失败")
-					}
+					success:function(data){
+						console.log(data.state)
+						if(data.state==1){
+							$("#detectOutput").text(data.message)
+						}
+						else{
+							alert("请上传正确格式的证书文件")
+						}
 				},
 			})
+				return false
+			});
+
+			//检验网站安全性
+			$('#domainToDetectSubmit').bind('click',function(){
+				$.getJSON('/detect',{domain:$('input[name="domainToDetect"]').val()},function(data){
+					var state=data.state
+					$("#domainDetect").text(data.output)
+				})	
 				return false
 			});
 

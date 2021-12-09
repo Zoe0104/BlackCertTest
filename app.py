@@ -41,6 +41,29 @@ app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
 def index():
     return render_template("index.html")
 
+# 证书分析器
+def analysisCert(cert):
+    certIssue=cert.get_issuer()
+    certSubject=cert.get_subject()
+    output=""
+    datetime_struct=datetime.datetime.strptime(cert.get_notAfter().decode("UTF-8")[0:-2],"%Y%m%d%H%M%S")
+    datetime_struct=datetime.datetime.strptime(cert.get_notBefore().decode("UTF-8")[0:-2],"%Y%m%d%H%M%S")
+    output+=("主题信息：\n")
+    output+=("CN：通用名称\tOU：机构单元名称\tO：机构名\nL：地理位置\tS：州/省名\tC：国名\n")
+    for item in certSubject.get_components():
+        output+=(item[0].decode("utf-8")+"——"+item[1].decode("utf-8")+'\n')
+    output+=("-------------------\n")
+    output+=("证书版本：\t"+str(cert.get_version()+1)+'\n')
+    output+=("证书序列号：\t"+str(hex(cert.get_serial_number()))+'\n')
+    output+=("使用的签名算法：\t"+str(cert.get_signature_algorithm().decode("UTF-8"))+'\n')
+    output+=("颁发机构：\t"+str(certIssue.commonName)+'\n')
+    output+=("有效期从：\t"+datetime_struct.strftime('%Y-%m-%d %H-%M-%S')+'\n')
+    output+=("至：\t"+datetime_struct.strftime('%Y-%m-%d %H-%M-%S')+'\n')
+    output+=("证书是否已经过期：\t"+str(cert.has_expired())+'\n')
+    output+=("公钥：\n"+crypto.dump_publickey(crypto.FILETYPE_PEM,cert.get_pubkey()).decode("utf-8")+'\n')
+    
+    return output
+
 ##############第一部分 网站证书查询###################
 @app.route('/search',methods=['GET'])
 def requestDomainSearch():
@@ -79,26 +102,7 @@ def obtainSSLcert(domain):
         # 别再查怎么存证书了，这不就是吗
         f.write(crypto.dump_certificate(crypto.FILETYPE_PEM,cert))
 
-    certIssue=cert.get_issuer()
-    certSubject=cert.get_subject()
-    output=""
-    datetime_struct=datetime.datetime.strptime(cert.get_notAfter().decode("UTF-8")[0:-2],"%Y%m%d%H%M%S")
-    datetime_struct=datetime.datetime.strptime(cert.get_notBefore().decode("UTF-8")[0:-2],"%Y%m%d%H%M%S")
-    output+=("主题信息：\n")
-    output+=("CN：通用名称\tOU：机构单元名称\tO：机构名\nL：地理位置\tS：州/省名\tC：国名\n")
-    for item in certSubject.get_components():
-        output+=(item[0].decode("utf-8")+"——"+item[1].decode("utf-8")+'\n')
-    output+=("-------------------\n")
-    output+=("证书版本：\t"+str(cert.get_version()+1)+'\n')
-    output+=("证书序列号：\t"+str(hex(cert.get_serial_number()))+'\n')
-    output+=("使用的签名算法：\t"+str(cert.get_signature_algorithm().decode("UTF-8"))+'\n')
-    output+=("颁发机构：\t"+str(certIssue.commonName)+'\n')
-    output+=("有效期从：\t"+datetime_struct.strftime('%Y-%m-%d %H-%M-%S')+'\n')
-    output+=("至：\t"+datetime_struct.strftime('%Y-%m-%d %H-%M-%S')+'\n')
-    output+=("证书是否已经过期：\t"+str(cert.has_expired())+'\n')
-    output+=("公钥：\n"+crypto.dump_publickey(crypto.FILETYPE_PEM,cert.get_pubkey()).decode("utf-8")+'\n')
-    
-    return output
+    return analysisCert(cert)
 
 # 下载证书文件
 @app.route('/download')
@@ -116,13 +120,19 @@ def allowed_file(filename):
 def extractFeature(cert):
     cert_feature=[]
     #1 输入是否自签
+    tem_flag=0
     a=cert.get_extension_count()
     for i in range(0,a):
         b=cert.get_extension(i).get_short_name()
-        if b==b'basicConstraints' and cert.get_extension(i).get_data()==b'0\x03\x01\x01\xff':
-            cert_feature+=[1]
-        else:
-            cert_feature+=[0]
+        if b==b'basicConstraints':
+            tem_flag=1
+            if cert.get_extension(i).get_data()==b'0\x03\x01\x01\xff':
+                cert_feature+=[1]
+            else:
+                cert_feature+=[0]
+            break
+    if tem_flag==0:
+        cert_feature+=[1]
 
     #2 输入是否有效域名
     a=cert.get_subject().CN
@@ -211,23 +221,25 @@ def extractFeature(cert):
         return cert_feature
 
 @app.route('/analysis', methods=['GET', 'POST'])
-def analysisCert():
+def detectMaliciousCert():
     if request.method == 'POST':
         # check if the post request has the file part
         if 'file' not in request.files:
             flash('No file part')
-            return jsonify(state=0)
+            return jsonify(state=-1)
         file = request.files['file']
         # if user does not select file, browser also
         # submit an empty part without filename
         if file.filename == '':
             flash('No selected file')
-            return jsonify(state=0)
+            return jsonify(state=-1)
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        else:
+            return jsonify(state=-1)
     else:
-        return jsonify(state=0)
+        return jsonify(state=-1)
     
     cert_file_buffer=open(os.path.join(app.config['UPLOAD_FOLDER'], filename)).read()
     cert=crypto.load_certificate(crypto.FILETYPE_PEM,cert_file_buffer)
@@ -235,11 +247,33 @@ def analysisCert():
     # 加载分类器进行分类
     with open(os.path.join(CURRENT_PARENT,"classific_model\\adaBoost.pickle"),"rb") as f:
         ada_module=pickle.load(f)
-    y=ada_module.predict([cert_feature])# 特征数量和模型的特征数量不匹配，可能是得重新训练一下模型就是说
-    if y==1:
-        return jsonify(message="这个证书很安全！",state=1)
+    y=ada_module.predict([cert_feature])
+    if y[0]==1:
+        return jsonify(message="这个证书很安全！\n\n"+analysisCert(cert),state=1)
     else:
-        return jsonify(message="这个证书很可疑！",state=1)
+        return jsonify(message="这个证书很可疑！\n\n"+analysisCert(cert),state=1)
+
+####################第三部分 网站安全性查验###########
+@app.route('/detect')
+def domainDetect():
+    domain=request.args.get("domain","",type=str)
+    rs = parse.urlparse(domain)
+    try:
+        cert = get_certificate(rs.hostname, int(rs.port or 443))
+    except TimeoutError:
+        return jsonify(output="请检查该域名是否无法访问。",state=0)
+    except Exception:
+        return jsonify(output="请输入以\"https://\"开头的正确格式的域名。",state=0)
+    else:
+        cert_feature=extractFeature(cert) # 获取特征工程的特征
+        # 加载分类器进行分类
+        with open(os.path.join(CURRENT_PARENT,"classific_model\\adaBoost.pickle"),"rb") as f:
+            ada_module=pickle.load(f)
+        y=ada_module.predict([cert_feature])
+        if y[0]==1:
+            return jsonify(output="这个网站很安全！\n\n"+analysisCert(cert),state=1)
+        else:
+            return jsonify(output="这个网站很可疑！\n\n"+analysisCert(cert),state=1)
 
 if __name__=="__main__":
     app.run(debug=True)
