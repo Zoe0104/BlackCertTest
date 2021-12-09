@@ -16,6 +16,17 @@ import parser
 import datetime
 import sklearn
 from werkzeug.utils import secure_filename
+from scipy.sparse.construct import rand, vstack
+from sklearn import svm
+from sklearn.ensemble import VotingClassifier
+from sklearn.ensemble import AdaBoostClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model  import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score,precision_score,recall_score
+import pickle
+import numpy as np
 
 
 app=Flask(__name__)
@@ -224,7 +235,7 @@ def analysisCert():
     # 加载分类器进行分类
     with open(os.path.join(CURRENT_PARENT,"classific_model\\adaBoost.pickle"),"rb") as f:
         ada_module=pickle.load(f)
-    y=ada_module.predict(cert_feature)
+    y=ada_module.predict([cert_feature])# 特征数量和模型的特征数量不匹配，可能是得重新训练一下模型就是说
     if y==1:
         return jsonify(message="这个证书很安全！",state=1)
     else:

@@ -81,14 +81,25 @@
 					alert("请选择文件");
 					return;
 				}
+				var formFile=new FormData()
+				formFile.append("file",fileObj)
 				//下面这一段有bug，但我决定先吃饭
-				$.getJSON('/analysis',{cert:fileObj},function(data){
+				$.ajax({
+					url:'/analysis',
+					data:formFile,
+					type:"post",
+					dataType:"json",
+					cache:false,
+					processData:false,
+					contentType:false,
+					sucess:	function(data){
 					if(data.state){
 						alert(data.message)}
 					else{
 						alert("文件上传失败")
 					}
-				})
+				},
+			})
 				return false
 			});
 
